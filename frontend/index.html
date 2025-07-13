@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hunter RPG Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+        .game-container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .story-text {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            min-height: 100px;
+            border-left: 4px solid #4CAF50;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input {
+            background-color: #444;
+            color: white;
+            border: 1px solid #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🎮 Hunter RPG Game</h1>
+        
+        <div id="gameSection">
+            <div>
+                <input type="text" id="playerName" placeholder="Masukkan nama hunter">
+                <button onclick="startGame()">Mulai Game</button>
+            </div>
+            
+            <div class="story-text" id="storyDisplay">
+                Selamat datang di Hunter RPG! Masukkan nama dan mulai petualangan.
+            </div>
+            
+            <div id="statsDisplay" style="background-color: #444; padding: 10px; border-radius: 5px; margin: 10px 0; display: none;">
+                <!-- Stats akan ditampilkan di sini -->
+            </div>
+            
+            <div id="actionButtons" style="display: none;">
+                <!-- Tombol aksi akan ditampilkan secara dinamis -->
+            </div>
+            
+            <div>
+                <button onclick="getStory()">Lihat Cerita</button>
+                <button onclick="getStats()" id="statsButton" style="display: none;">Lihat Stats</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Konfigurasi untuk icp.ninja
+        let actor = null;
+        let gameState = null;
+
+        // Inisialisasi koneksi ke canister
+        async function initCanister() {
+            try {
+                // Ganti dengan canister ID dari icp.ninja setelah deploy
+                const canisterId = "YOUR_CANISTER_ID_HERE"; // Dapatkan dari icp.ninja setelah deploy
+                
+                // Untuk icp.ninja, gunakan agent dengan network IC
+                const agent = new HttpAgent({
+                    host: "https://ic0.app"
+                });
+                
+                // IDL interface untuk canister RPG
+                const idlFactory = ({ IDL }) => {
+                    return IDL.Service({
+                        'startGame': IDL.Func([IDL.Text], [IDL.Text], []),
+                        'getStory': IDL.Func([], [IDL.Text], ['query']),
+                        'playerAction': IDL.Func([IDL.Text], [IDL.Text], []),
+                        'getStats': IDL.Func([], [IDL.Text], ['query'])
+                    });
+                };
+                
+                actor = Actor.createActor(idlFactory, {
+                    agent,
+                    canisterId
+                });
+                
+                console.log("Canister terhubung!");
+            } catch (error) {
+                console.error("Error connecting to canister:", error);
+                alert("Gagal terhubung ke canister. Menggunakan mode simulasi.");
+            }
+        }
+
+        // Fungsi untuk menampilkan tombol aksi berdasarkan progress
+        function showActionButtons(progress, path = "") {
+            const buttonContainer = document.getElementById('actionButtons');
+            buttonContainer.innerHTML = '';
+            
+            if (progress === 0) {
+                buttonContainer.innerHTML = `
+                    <button onclick="performAction('pergi latihan')">🏋️ Pergi Latihan</button>
+                    <button onclick="performAction('baca buku')">📚 Baca Buku Magic</button>
+                    <button onclick="performAction('menyerah')">😞 Menyerah</button>
+                `;
+            } else if (progress === 1) {
+                if (path === "fighter") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('berserker')">⚔️ Berserker</button>
+                        <button onclick="performAction('guardian')">🛡️ Guardian</button>
+                        <button onclick="performAction('assassin')">🗡️ Assassin</button>
+                    `;
+                } else if (path === "mage") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('elementalist')">🔥 Elementalist</button>
+                        <button onclick="performAction('healer')">💚 Healer</button>
+                        <button onclick="performAction('summoner')">👹 Summoner</button>
+                    `;
+                }
+            } else if (progress === 2) {
+                if (path === "berserker") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('serang langsung')">💥 Serang Langsung</button>
+                        <button onclick="performAction('strategi')">🧠 Gunakan Strategi</button>
+                        <button onclick="performAction('cari bantuan')">👥 Cari Bantuan</button>
+                    `;
+                } else if (path === "guardian") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('terima misi')">✅ Terima Misi</button>
+                        <button onclick="performAction('tolak')">❌ Tolak</button>
+                        <button onclick="performAction('negosiasi')">🤝 Negosiasi</button>
+                    `;
+                } else if (path === "assassin") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('terima misi')">🎯 Terima Misi</button>
+                        <button onclick="performAction('investigasi dulu')">🔍 Investigasi Dulu</button>
+                        <button onclick="performAction('tolak')">❌ Tolak</button>
+                    `;
+                } else if (path === "elementalist") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('buka seal')">🔓 Buka Seal</button>
+                        <button onclick="performAction('pelajari dulu')">📖 Pelajari Dulu</button>
+                        <button onclick="performAction('cari wizard lain')">🧙 Cari Wizard Lain</button>
+                    `;
+                } else if (path === "healer") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('gabung raid')">⚔️ Gabung Raid</button>
+                        <button onclick="performAction('minta bayaran tinggi')">💰 Minta Bayaran Tinggi</button>
+                        <button onclick="performAction('tolak')">❌ Tolak</button>
+                    `;
+                } else if (path === "summoner") {
+                    buttonContainer.innerHTML = `
+                        <button onclick="performAction('terima kontrak')">📜 Terima Kontrak</button>
+                        <button onclick="performAction('negosiasi')">🤝 Negosiasi</button>
+                        <button onclick="performAction('tolak')">❌ Tolak</button>
+                    `;
+                }
+                // Tambah logic untuk path lainnya
+            } else {
+                buttonContainer.innerHTML = `
+                    <button onclick="restartGame()">🔄 Mulai Ulang</button>
+                `;
+            }
+            
+            buttonContainer.style.display = 'block';
+        }
+
+        // Fungsi untuk melakukan aksi dari tombol
+        async function performAction(action) {
+            try {
+                let result;
+                if (actor) {
+                    result = await actor.playerAction(action);
+                    // Update gameState dari canister response jika ada
+                    gameState.progress = (gameState.progress || 0) + 1;
+                    // Untuk canister, path diupdate di backend
+                } else {
+                    result = simulateComplexAction(action);
+                    gameState.progress = (gameState.progress || 0) + 1;
+                }
+                
+                document.getElementById('storyDisplay').innerText = result;
+                showActionButtons(gameState.progress, gameState.path);
+                
+            } catch (error) {
+                alert('Error melakukan aksi: ' + error.message);
+            }
+        }
+
+        // Simulasi aksi yang lebih kompleks - DIPERBAIKI
+        function simulateComplexAction(action) {
+            const progress = gameState.progress || 0;
+            const path = gameState.path || "";
+            
+            // Progress 0: Pilihan awal
+            if (progress === 0) {
+                if (action === 'pergi latihan') {
+                    gameState.path = "fighter";
+                    return "Kamu berlatih keras. Saat latihan, notifikasi muncul: 'Reawakening Fighter Type!'. Pilih spesialisasi: ('berserker', 'guardian', atau 'assassin')";
+                } else if (action === 'baca buku') {
+                    gameState.path = "mage";
+                    return "Kamu membaca buku magic theory. Notifikasi muncul: 'Reawakening Mage Type!'. Pilih spesialisasi: ('elementalist', 'healer', atau 'summoner')";
+                } else if (action === 'menyerah') {
+                    gameState.path = "civilian";
+                    return "Kamu menyerah dan hidup normal. Tapi nasib berkata lain... (Game Selesai - Ending Biasa)";
+                }
+            }
+            // Progress 1: Spesialisasi Fighter
+            else if (progress === 1 && path === "fighter") {
+                if (action === 'berserker') {
+                    gameState.path = "berserker";
+                    return "Kamu menjadi Berserker! Kekuatan fisikmu meningkat drastis. Ada dungeon S-rank yang muncul. Pilih: ('serang langsung', 'strategi', atau 'cari bantuan')";
+                } else if (action === 'guardian') {
+                    gameState.path = "guardian";
+                    return "Kamu menjadi Guardian! Kamu dapat melindungi orang lain. Tim hunter meminta bantuanmu. Pilih: ('terima misi', 'tolak', atau 'negosiasi')";
+                } else if (action === 'assassin') {
+                    gameState.path = "assassin";
+                    return "Kamu menjadi Assassin! Kecepatan dan keberuntunganmu tinggi. Ada misi rahasia. Pilih: ('terima misi', 'investigasi dulu', atau 'tolak')";
+                }
+            }
+            // Progress 1: Spesialisasi Mage
+            else if (progress === 1 && path === "mage") {
+                if (action === 'elementalist') {
+                    gameState.path = "elementalist";
+                    return "Kamu menguasai magic elemen! Ada ancient dungeon dengan magic seal. Pilih: ('buka seal', 'pelajari dulu', atau 'cari wizard lain')";
+                } else if (action === 'healer') {
+                    gameState.path = "healer";
+                    return "Kamu menjadi Healer langka! Guild membutuhkan bantuanmu untuk raid besar. Pilih: ('gabung raid', 'minta bayaran tinggi', atau 'tolak')";
+                } else if (action === 'summoner') {
+                    gameState.path = "summoner";
+                    return "Kamu dapat memanggil monster! Ada kontrak dengan Ancient Dragon. Pilih: ('terima kontrak', 'negosiasi', atau 'tolak')";
+                }
+            }
+            // Progress 2: Ending
+            else if (progress === 2) {
+                // Berserker endings
+                if (path === "berserker") {
+                    if (action === 'serang langsung') return "Kamu menyerang dungeon sendirian dan berhasil! Kamu menjadi Legend Berserker! (Ending: Solo Legend)";
+                    if (action === 'strategi') return "Kamu menggunakan strategi dan berhasil dengan mudah. Kamu menjadi Tactical Berserker! (Ending: Smart Fighter)";
+                    if (action === 'cari bantuan') return "Kamu membentuk tim dan sukses bersama. Kamu menjadi Leader Berserker! (Ending: Team Leader)";
+                }
+                // Guardian endings
+                else if (path === "guardian") {
+                    if (action === 'terima misi') return "Kamu menyelamatkan tim dan menjadi Hero Guardian! (Ending: Hero Guardian)";
+                    if (action === 'tolak') return "Kamu fokus self-improvement dan menjadi Perfect Guardian! (Ending: Perfect Defense)";
+                    if (action === 'negosiasi') return "Kamu bernegosiasi dan menjadi Diplomat Guardian! (Ending: Peace Keeper)";
+                }
+                // Assassin endings  
+                else if (path === "assassin") {
+                    if (action === 'terima misi') return "Kamu menerima misi rahasia dan berhasil sempurna! Kamu menjadi Shadow Master! (Ending: Shadow Legend)";
+                    if (action === 'investigasi dulu') return "Kamu menyelidiki misi dan menemukan konspirasi besar. Kamu menjadi Truth Seeker! (Ending: Dark Detective)";
+                    if (action === 'tolak') return "Kamu menolak dan fokus pada misi sendiri. Kamu menjadi Lone Wolf! (Ending: Solo Assassin)";
+                }
+                // Elementalist endings
+                else if (path === "elementalist") {
+                    if (action === 'buka seal') return "Kamu membuka seal dan mendapat ancient magic! Kamu menjadi Archmage! (Ending: Ancient Power)";
+                    if (action === 'pelajari dulu') return "Kamu mempelajari magic dengan hati-hati dan menjadi Wise Elementalist! (Ending: Wisdom Path)";
+                    if (action === 'cari wizard lain') return "Kamu bekerja sama dengan wizard lain dan menjadi Magic Council Leader! (Ending: Magic Alliance)";
+                }
+                // Healer endings
+                else if (path === "healer") {
+                    if (action === 'gabung raid') return "Kamu bergabung dengan raid dan menyelamatkan semua anggota! Kamu menjadi Saint Healer! (Ending: Divine Savior)";
+                    if (action === 'minta bayaran tinggi') return "Kamu menjadi healer eksklusif untuk guild elit. Kamu menjadi Premium Healer! (Ending: Elite Medic)";
+                    if (action === 'tolak') return "Kamu fokus membantu rakyat biasa dan menjadi People's Healer! (Ending: Folk Hero)";
+                }
+                // Summoner endings
+                else if (path === "summoner") {
+                    if (action === 'terima kontrak') return "Kamu menandatangani kontrak dengan Ancient Dragon! Kamu menjadi Dragon Lord! (Ending: Dragon Master)";
+                    if (action === 'negosiasi') return "Kamu bernegosiasi dan mendapat kontrak yang lebih baik. Kamu menjadi Contract Master! (Ending: Smart Summoner)";
+                    if (action === 'tolak') return "Kamu menolak dan mencari familiar sendiri. Kamu menjadi Independent Summoner! (Ending: Free Spirit)";
+                }
+            }
+            
+            return "Aksi tidak dikenali atau cerita berakhir.";
+        }
+
+        // Fungsi untuk menampilkan stats
+        async function getStats() {
+            try {
+                let result;
+                if (actor) {
+                    result = await actor.getStats();
+                } else {
+                    result = "Stats: STR: 15, INT: 10, LUCK: 12 (Mode Simulasi)";
+                }
+                document.getElementById('statsDisplay').innerText = result;
+                document.getElementById('statsDisplay').style.display = 'block';
+            } catch (error) {
+                alert('Error mengambil stats: ' + error.message);
+            }
+        }
+
+        async function startGame() {
+            const name = document.getElementById('playerName').value;
+            if (!name) {
+                alert('Masukkan nama terlebih dahulu!');
+                return;
+            }
+            
+            try {
+                let result;
+                if (actor) {
+                    result = await actor.startGame(name);
+                } else {
+                    result = `Halo ${name}! Kamu adalah seorang hunter rank F yang lemah dan sering diremehkan. Suatu hari, kamu terbangun di rumah sakit setelah dungeon run gagal. Apa yang akan kamu lakukan?`;
+                }
+                
+                document.getElementById('storyDisplay').innerText = result;
+                gameState = { started: true, progress: 0, path: "" };
+                document.getElementById('statsButton').style.display = 'inline';
+                showActionButtons(0);
+            } catch (error) {
+                alert('Error memulai game: ' + error.message);
+            }
+        }
+
+        function restartGame() {
+            gameState = null;
+            document.getElementById('playerName').value = '';
+            document.getElementById('storyDisplay').innerText = 'Selamat datang di Hunter RPG! Masukkan nama dan mulai petualangan.';
+            document.getElementById('actionButtons').style.display = 'none';
+        }
+
+        // Event listener untuk Enter key
+        document.getElementById('actionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                playerAction();
+            }
+        });
+
+        document.getElementById('playerName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startGame();
+            }
+        });
+
+        // Inisialisasi saat halaman dimuat
+        window.onload = function() {
+            // Load script agent jika diperlukan
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@dfinity/agent@0.19.2/lib/cjs/index.js';
+            script.onload = initCanister;
+            document.head.appendChild(script);
+        };
+    </script>
+</body>
+</html>
